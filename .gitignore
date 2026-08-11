@@ -1,0 +1,36 @@
+# OS / editor junk
+.DS_Store
+.Rhistory
+*.pyc
+__pycache__/
+
+# Snakemake's own cache / conda envs
+.snakemake/
+
+# Pipeline outputs (results_dir trees, regenerable from the pipeline)
+00_pool/
+01_barcode_tagged/
+02_sc_alignment/
+03_tRNA_matrix/
+combined_gex_fbc/
+fbc_only/
+gex_only/
+ocm1_results/
+ocm2_results/
+
+# Ad hoc results / logs / analysis outputs, not source
+logs/
+comparisons/
+fbc_results/
+diagnostics/
+grant_data/
+trna_mismatch_profile.csv
+
+# Superseded early script versions (kept on disk, not part of the pipeline)
+code/archive/
+
+# Cluster submission scripts (site-specific paths/accounts, not for GitHub)
+sbatch/
+
+# Session working notes (internal, not meant for the shared repo)
+CONTEXT.md

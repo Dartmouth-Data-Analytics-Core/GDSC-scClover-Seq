@@ -1,0 +1,44 @@
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+# config for sc-Clover-Seq (OCM) — driven by the cellranger multi CSVs
+#
+# Por well, só 2 coisas:
+#   multi_csv : o CSV do cellranger multi (OCM1.csv / OCM2.csv)
+#   multi_out : o diretório .../outs do run multi daquela well
+# O Snakefile lê o CSV e deriva os fastq FBC + o mapa OB->barcodes.
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+wells:
+  236860-1:
+    multi_csv: /dartfs-hpc/rc/lab/G/GSR_Active/Labs/Orellana/260608_10X/analysis/OCM1.csv
+    multi_out: /dartfs-hpc/rc/lab/G/GSR_Active/Labs/Orellana/260608_10X/analysis/236860_1/outs
+  236860-2:
+    multi_csv: /dartfs-hpc/rc/lab/G/GSR_Active/Labs/Orellana/260608_10X/analysis/OCM2.csv
+    multi_out: /dartfs-hpc/rc/lab/G/GSR_Active/Labs/Orellana/260608_10X/analysis/236860_2/outs
+
+# qual biblioteca puxar do [libraries] do CSV (substring do fastq_id).
+# "FBC1" pega FBC1 e FBC1_DIL1, e exclui FBC2 e GEX.
+fbc_token: FBC1
+library_filter: "GEX"  
+library_exclude: "FBC"           # "all" = GEX + FBC juntos (como o Cell Ranger)
+results_dir: gex_only 
+
+# --- barcode / UMI (3' v4: 16 bp CB + 12 bp UMI, R1 = 28 bp, verificado) ---
+bc_pattern: CCCCCCCCCCCCCCCCNNNNNNNNNNNN
+umi_separator: "_"
+
+# --- trimming ---
+tso: AAGCAGTGGTATCAACGCAGAGTACATGGG   # 30 bp TSO (5' de R2)
+adapter_1: AGATCGGAAGAGC               # <-- adapter 3' real do bulk Clover-Seq
+minlength: 20
+
+# --- bowtie2 / referência tRNA (mesma do bulk) ---
+trna_db: "/dartfs-hpc/rc/lab/G/GMBSR_bioinfo/genomic_references/tRAX_databases/mm10_db"
+bt2_index: "/dartfs-hpc/rc/lab/G/GMBSR_bioinfo/genomic_references/tRAX_databases/mm10_db/bt2_index/db-tRNAgenome"
+maxMaps: 50
+nPenalty: 5
+
+# --- full biotype classification (count_all_smRNA.py), FBC library only ---
+# Ensembl GTF used to build the mm10_smRNA cellranger reference (gene_biotype tag).
+smrna_gtf: "/dartfs-hpc/rc/lab/G/GSR_Active/scripts/refs/Mouse/mm10_smRNA/genes/genes.gtf.gz"
+# which OBs to split out and compare (well1+well2 summed per OB, via replicate grouping)
+fbc_biotype_obs: ["OB1", "OB2"]
