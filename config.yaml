@@ -1,10 +1,11 @@
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 # config for sc-Clover-Seq (OCM) — driven by the cellranger multi CSVs
 #
-# Por well, só 2 coisas:
-#   multi_csv : o CSV do cellranger multi (OCM1.csv / OCM2.csv)
-#   multi_out : o diretório .../outs do run multi daquela well
-# O Snakefile lê o CSV e deriva os fastq FBC + o mapa OB->barcodes.
+# Per well, just 2 things:
+#   multi_csv : that well's cellranger multi CSV (OCM1.csv / OCM2.csv)
+#   multi_out : that well's multi run's .../outs directory
+# The Snakefile reads the CSV directly and derives the FBC fastqs + the
+# OB->barcodes map from it.
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
 wells:
@@ -15,27 +16,27 @@ wells:
     multi_csv: /dartfs-hpc/rc/lab/G/GSR_Active/Labs/Orellana/260608_10X/analysis/OCM2.csv
     multi_out: /dartfs-hpc/rc/lab/G/GSR_Active/Labs/Orellana/260608_10X/analysis/236860_2/outs
 
-# qual biblioteca puxar do [libraries] do CSV (token exato do fastq_id,
-# separado por "_" -- ex: "236860-1_GEX1_FBC1" -> tokens GEX1, FBC1).
-# Default = FBC1 (a pipeline de tRNA, o uso principal); pra rodar GEX-only
-# ou "all" (GEX+FBC juntos), sobrescreva os 3 via --config, como os outros
-# .sbatch já fazem (ex: sbatch/run_gex_align.sbatch usa library_filter=GEX1
-# library_exclude=FBC1 results_dir=gex_only).
+# which library to pull from the CSV's [libraries] block (exact fastq_id
+# token, split on "_" -- e.g. "236860-1_GEX1_FBC1" -> tokens GEX1, FBC1).
+# Default = FBC1 (the tRNA pipeline, the main use case); to run GEX-only
+# or "all" (GEX+FBC pooled), override all 3 via --config, same as the
+# other .sbatch scripts already do (e.g. sbatch/run_gex_align.sbatch uses
+# library_filter=GEX1 library_exclude=FBC1 results_dir=gex_only).
 fbc_token: FBC1
 library_filter: "FBC1"
-library_exclude: "__none__"      # "all" = GEX + FBC juntos (como o Cell Ranger)
+library_exclude: "__none__"      # "all" = GEX + FBC pooled (matching Cell Ranger)
 results_dir: fbc_only
 
-# --- barcode / UMI (3' v4: 16 bp CB + 12 bp UMI, R1 = 28 bp, verificado) ---
+# --- barcode / UMI (3' v4: 16 bp CB + 12 bp UMI, R1 = 28 bp) ---
 bc_pattern: CCCCCCCCCCCCCCCCNNNNNNNNNNNN
 umi_separator: "_"
 
 # --- trimming ---
-tso: AAGCAGTGGTATCAACGCAGAGTACATGGG   # 30 bp TSO (5' de R2)
-adapter_1: AGATCGGAAGAGC               # <-- adapter 3' real do bulk Clover-Seq
+tso: AAGCAGTGGTATCAACGCAGAGTACATGGG   # 30 bp TSO (R2 5' end)
+adapter_1: AGATCGGAAGAGC               
 minlength: 20
 
-# --- bowtie2 / referência tRNA (mesma do bulk) ---
+# --- bowtie2 / tRNA reference (same as bulk) ---
 trna_db: "/dartfs-hpc/rc/lab/G/GMBSR_bioinfo/genomic_references/tRAX_databases/mm10_db"
 bt2_index: "/dartfs-hpc/rc/lab/G/GMBSR_bioinfo/genomic_references/tRAX_databases/mm10_db/bt2_index/db-tRNAgenome"
 maxMaps: 100
@@ -44,9 +45,5 @@ nPenalty: 5
 # --- full biotype classification (count_all_smRNA.py), FBC library only ---
 # Ensembl GTF used to build the mm10_smRNA cellranger reference (gene_biotype tag).
 smrna_gtf: "/dartfs-hpc/rc/lab/G/GSR_Active/scripts/refs/Mouse/mm10_smRNA/genes/genes.gtf.gz"
-# which OBs to split out and compare (well1+well2 summed per OB, via replicate grouping)
-fbc_biotype_obs: ["OB1", "OB2"]
-# reclassified copy of smrna_gtf (Gm23935 miRNA->rRNA fix, see CONTEXT.md) --
-# used by sc_biotype_by_sample instead of smrna_gtf, same GTF the earlier
-# grant-item-3 biotype table (run_fbc_biotype.sbatch) already used.
+# reclassified copy of smrna_gtf (Gm23935 miRNA->rRNA fix) --
 reclass_gtf: "/dartfs-hpc/rc/lab/G/GMBSR_bioinfo/Labs/orellana/2607_10X/grant_data/ref/genes.reclass.gtf.gz"
