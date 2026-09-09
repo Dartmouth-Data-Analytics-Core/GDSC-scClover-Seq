@@ -98,7 +98,7 @@ add `--account=...`/adjust `--partition` for your own allocation.
 sbatch cellranger_multi_job.sh
 ```
 
-This is shown here for reference/reproducibility only — the Snakemake
+This is shown here for reference only — the Snakemake
 pipeline itself reads `cellranger multi`'s outputs directly, it never
 invokes `cellranger multi` itself.
 
@@ -110,9 +110,6 @@ the CSV and `outs` directory from the `cellRanger multi` run.
 
 ![The wells: block in config.yaml, with each well's multi_csv and multi_out fields pointing at that well's own cellranger multi CSV and outs/ directory](docs/img/config_wells_example.png)
 
-*The `wells:` block for this dataset's 2 wells (`236860-1`, `236860-2`) --
-each key is a well name you choose, `multi_csv` points at that well's
-`cellranger multi` CSV, `multi_out` at that well's `outs/` directory.*
 
 > [!Important]
 > What this pipeline calls a "well" is the final sequencing pool
@@ -228,10 +225,6 @@ sbatch job_script.sh
 2. Edit `library_filter` and `results_dir` in the `config.yaml`(see
    [Configuration](#configuration)).
 3. Submit `job_script.sh` to SLURM.
-
-```bash
-sbatch job_script.sh
-```
 
 ## Optional Features
 
