@@ -6,14 +6,11 @@ Snakemake for use on the Dartmouth `dartfs-hpc` cluster. It extends
 [GDSC-Clover-Seq](https://github.com/Dartmouth-Data-Analytics-Core/GDSC-clover-Seq)
 (bulk tRNA-seq) by adding cell-barcode/UMI awareness to its
 `choosemappings.py` multi-mapping resolution step, recovering tRNA reads
-that a standard scRNA-seq pipeline (Cell Ranger) systematically drops,
-because tRNA genes exist as near-identical copies at multiple genomic loci
-and Cell Ranger's generic aligner treats that as low-confidence
-multi-mapping. Software dependencies are installed per rule by Snakemake
+that a standard scRNA-seq pipeline (Cell Ranger) systematically drops. Software dependencies are installed per rule by Snakemake
 from the conda environment file in `env_config/`.
 
 This pipeline assumes `cellranger multi` has already been run for every
-pool; it reads that run's own CSV and `outs/` directory directly (cell
+pool; it reads that run's own `CSV` and `outs` directory directly (cell
 calling, barcode whitelists, and the GEX/protein-coding side all come
 from there) and never re-runs or replaces it.
 
@@ -31,26 +28,22 @@ from there) and never re-runs or replaces it.
 
 Currently the pipeline performs the following, per configured well:
 
-- Pooling of the selected sequencing library or libraries (the dedicated
+- Pooling selected sequencing library or libraries (the dedicated
   tRNA-enriched small-RNA library, the gene-expression library, or both
   combined) across sequencing runs
-- Cell barcode + UMI extraction from R1, restricted to the union of
-  barcodes `cellranger multi` already called as real cells
+- Cell barcode + UMI extraction from R1 using
+  barcodes `cellranger multi` already identified as real cells
 - Adapter/TSO trimming of R2 (`cutadapt`)
-- Alignment to a combined tRNA+genome Bowtie2 reference (`--local
-  --very-sensitive`), with reads that never align anywhere in that
-  reference captured separately rather than discarded
+- Alignment to combined tRNA+genome Bowtie2 reference (`--local
+  --very-sensitive`), with unmapped reads captured separately rather than discarded
 - Multi-mapping resolution using Clover-Seq's unmodified `choosemappings.py`
-- Per-cell, per-sample UMI-deduplicated tRNA counting, at both isoacceptor
+- Per-cell, per-sample, UMI-deduplicated tRNA counts, at both isoacceptor
   and isodecoder level
-- A flat, externally-numbered sample view spanning every well, plus a
+- A flat, externally-numbered sample view across every well, plus a
   manifest mapping each external sample back to its well/internal origin
-- Per-sample biotype composition (tRNA, pre-tRNA, every Ensembl
-  `gene_biotype`, then "other"), reusing Clover-Seq's unmodified
+- Per-sample biotype composition reusing Clover-Seq's unmodified
   `count_all_smRNA.py`
-- Pull-through of `cellranger multi`'s own already-computed, splice-aware
-  gene expression matrix, filtered to protein-coding genes, for combined
-  tRNA + gene-expression analyses
+- Pull-through of `cellranger multi` gene expression matrix, filtered to protein-coding genes, for combined tRNA + gene-expression analyses
 
 ## Quick Start
 
@@ -58,10 +51,9 @@ Currently the pipeline performs the following, per configured well:
 > `cellranger multi` must already have been run for every well before
 > starting here. This pipeline does not run it for you.
 
-1. Point `config.yaml`'s `wells:` block at your `cellranger multi` CSV(s)
-   and their `outs/` directories.
-2. Set `library_filter` / `results_dir` in `config.yaml`, or use the
-   FBC1/`fbc_only` defaults already checked in (see
+1. Edit the `wells` value in the `config.yaml` using the outputs of `cellRanger multi`(see
+   [Configuration](#configuration)).
+2. Edit `library_filter` and `results_dir` in the `config.yaml`(see
    [Configuration](#configuration)).
 3. Submit `job_script.sh` to SLURM.
 
@@ -88,10 +80,9 @@ conda activate /dartfs/rc/nosnapshots/G/GMBSR_refs/envs/snakemake
 
 ### 1. Well configuration
 
-There is no separate sample sheet. Each **well** (e.g. `236860-1`) is
-described by its own `cellranger multi` CSV, which Snakemake parses
-directly. `config.yaml`'s `wells:` block just points at where that CSV and
-its `outs/` directory live.
+Each **well** (e.g. `236860-1`) is described by its own `cellranger multi` CSV, 
+which Snakemake parses directly. The `wells` block indicates the location of
+the CSV and `outs` directory from the `cellRanger multi` run.
 
 > **Important**
 > What this pipeline calls a "well" is the final sequencing pool
@@ -136,7 +127,7 @@ sample_id,ocm_barcode_ids,
 
 ### 2. Pipeline parameters
 
-All settings live in `config.yaml`. At minimum, check the following
+All settings are configured by `config.yaml`. At minimum, check the following
 before a first run:
 
 | Parameter | Description |
@@ -152,7 +143,7 @@ before a first run:
 
 ### 3. Job submission scripts
 
-`job_script.sh` (repo root) is the example submission script: it runs
+`job_script.sh` (repository root) is the example submission script: it runs
 Snakemake with `--profile cluster_profile`, which submits every rule as
 its own separate `sbatch` job, sized to that rule's own declared
 `threads`/`resources` (see `cluster_profile/config.yaml`), instead of one
@@ -245,7 +236,7 @@ alignment rule; no extra target is needed to produce it.
 
 ## Contact
 
-**Contact and questions**: Please address questions to [DataAnalyticsCore@groups.dartmouth.edu](mailto:DataAnalyticsCore@groups.dartmouth.edu) or submit an issue in the GitHub repository.
+**Contact and questions**: Please address questions to [GDSC@groups.dartmouth.edu](mailto:GDSC@groups.dartmouth.edu) or submit an issue in the GitHub repository.
 
 This pipeline extends [GDSC-Clover-Seq](https://github.com/Dartmouth-Data-Analytics-Core/GDSC-clover-Seq),
 itself adapted from the [tRAX tool](https://github.com/UCSC-LoweLab/tRAX)
