@@ -78,7 +78,7 @@ git clone https://github.com/Dartmouth-Data-Analytics-Core/GDSC-scClover-Seq
 cd GDSC-scClover-Seq
 ```
 
-Then get the shared Snakemake environment on your `PATH` (shared Snakemake environment):
+Then get the shared Snakemake environment on your `PATH`:
 
 ```bash
 conda activate /dartfs/rc/nosnapshots/G/GMBSR_refs/envs/snakemake
