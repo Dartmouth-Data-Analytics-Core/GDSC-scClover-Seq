@@ -184,7 +184,8 @@ rule pool_runs:
         r1 = temp(f"{RES}/00_pool/{{well}}.R1.fastq.gz"),
         r2 = temp(f"{RES}/00_pool/{{well}}.R2.fastq.gz")
     message: "Pooling reads across runs/libraries: {wildcards.well}"
-    resources: cpus="1", maxtime="4:00:00", mem_mb="4gb"
+    threads: 1
+    resources: maxtime="4:00:00", mem_mb="4gb"
     shell: """
         cat {input.r1} > {output.r1}
         cat {input.r2} > {output.r2}
@@ -198,7 +199,8 @@ rule cell_whitelist:
     output:
         wl = f"{RES}/00_pool/{{well}}.cell_whitelist.txt"
     message: "Building union cell whitelist: {wildcards.well}"
-    resources: cpus="1", maxtime="0:30:00", mem_mb="4gb"
+    threads: 1
+    resources: maxtime="0:30:00", mem_mb="4gb"
     shell: """
         zcat {input.bcs} | sed 's/-1$//' | sort -u > {output.wl}
     """
@@ -216,7 +218,8 @@ rule barcode_extract:
     log: f"{RES}/01_barcode_tagged/logs/{{well}}.umi_tools_extract.log"
     message: "Extracting cell barcode + UMI: {wildcards.well}"
     conda: "env_config/clover-seq.yaml"
-    resources: cpus="2", maxtime="12:00:00", mem_mb="16gb"
+    threads: 2
+    resources: maxtime="12:00:00", mem_mb="16gb"
     params:
         bc_pattern = config["bc_pattern"]
     shell: """
@@ -348,7 +351,8 @@ rule sc_tRNA_count:
     log: f"{RES}/03_tRNA_matrix/logs/{{well}}.{{ob}}.count.log"
     message: "Counting single-cell tRNA UMIs: {wildcards.well} {wildcards.ob}"
     conda: "env_config/clover-seq.yaml"
-    resources: cpus="1", maxtime="2:00:00", mem_mb="32gb"
+    threads: 1
+    resources: maxtime="2:00:00", mem_mb="32gb"
     params:
         tRNA_db       = config["trna_db"],
         umi_separator = config["umi_separator"]
@@ -380,7 +384,8 @@ rule sc_tRNA_count_isodecoder:
     log: f"{RES}/03_tRNA_matrix/logs/{{well}}.{{ob}}.isodecoder_{{mode}}.count.log"
     message: "Counting single-cell tRNA UMIs (isodecoder, {wildcards.mode}): {wildcards.well} {wildcards.ob}"
     conda: "env_config/clover-seq.yaml"
-    resources: cpus="1", maxtime="2:00:00", mem_mb="32gb"
+    threads: 1
+    resources: maxtime="2:00:00", mem_mb="32gb"
     params:
         tRNA_db       = config["trna_db"],
         umi_separator = config["umi_separator"]
@@ -412,6 +417,8 @@ rule sc_tRNA_by_sample_view:
         barcodes = f"{RES}/03_tRNA_matrix_by_sample/{{ext_ob}}{{variant}}/barcodes.tsv",
         features = f"{RES}/03_tRNA_matrix_by_sample/{{ext_ob}}{{variant}}/features.tsv"
     message: "OB1-OB8 sample view: {wildcards.ext_ob}{wildcards.variant}"
+    threads: 1
+    resources: maxtime="0:10:00", mem_mb="1gb"
     run:
         import os
         for src, dst in zip(
@@ -438,7 +445,8 @@ rule sc_biotype_split_bam:
     log: f"{RES}/02_sc_alignment/logs/biosample_{{ext_ob}}.split.log"
     message: "Splitting BAM for external sample: {wildcards.ext_ob}"
     conda: "env_config/clover-seq.yaml"
-    resources: cpus="1", maxtime="2:00:00", mem_mb="16gb"
+    threads: 1
+    resources: maxtime="2:00:00", mem_mb="16gb"
     shell: """
         python code/split_bam_by_whitelist.py \
             --input {input.bam} \
@@ -457,6 +465,8 @@ rule sc_biotype_samplefile:
     output:
         tsv = f"{RES}/03_biotype_by_sample/samples.txt"
     message: "Writing count_all_smRNA.py samplefile for OB1-OB8"
+    threads: 1
+    resources: maxtime="0:10:00", mem_mb="1gb"
     run:
         import os
         os.makedirs(os.path.dirname(output.tsv), exist_ok=True)
@@ -548,7 +558,8 @@ rule sc_protein_coding_matrix:
     # on disk but unused/superseded. Re-isolate it again before ever
     # touching an already-built results_dir (e.g. fbc_only/) with this env.
     conda: "env_config/clover-seq.yaml"
-    resources: cpus="1", maxtime="1:00:00", mem_mb="16gb"
+    threads: 1
+    resources: maxtime="1:00:00", mem_mb="16gb"
     params:
         gtf = config["reclass_gtf"]
     shell: """
@@ -577,6 +588,8 @@ rule sc_protein_coding_by_sample_view:
         barcodes = f"{RES}/03_protein_coding_matrix_by_sample/{{ext_ob}}/barcodes.tsv",
         features = f"{RES}/03_protein_coding_matrix_by_sample/{{ext_ob}}/features.tsv"
     message: "OB1-OB8 sample view (protein_coding): {wildcards.ext_ob}"
+    threads: 1
+    resources: maxtime="0:10:00", mem_mb="1gb"
     run:
         import os
         for src, dst in zip(
@@ -599,6 +612,8 @@ rule sample_manifest:
     output:
         tsv = f"{RES}/sample_manifest.tsv"
     message: "Writing OB -> well/internal-OB sample manifest"
+    threads: 1
+    resources: maxtime="0:10:00", mem_mb="1gb"
     run:
         ordered_ext_obs = sorted(EXT_OB_SOURCE, key=lambda x: int(x[2:]))
         with open(output.tsv, "w") as fh:

@@ -63,10 +63,10 @@ Currently the pipeline performs the following, per configured well:
 2. Set `library_filter` / `results_dir` in `config.yaml`, or use the
    FBC1/`fbc_only` defaults already checked in (see
    [Configuration](#configuration)).
-3. Submit one of the scripts in `sbatch/` to SLURM.
+3. Submit `job_script.sh` to SLURM.
 
 ```bash
-sbatch sbatch/run_fbc_align.sbatch
+sbatch job_script.sh
 ```
 
 ## Installation
@@ -152,12 +152,17 @@ before a first run:
 
 ### 3. Job submission scripts
 
-Every run goes through one of the scripts in `sbatch/`.
+`job_script.sh` (repo root) is the example submission script: it runs
+Snakemake with `--profile cluster_profile`, which submits every rule as
+its own separate `sbatch` job, sized to that rule's own declared
+`threads`/`resources` (see `cluster_profile/config.yaml`), instead of one
+job reserving a single large allocation upfront for the whole pipeline.
 
 > **Important**
-> Check the `--account`/`--partition` and email fields at the top of the
-> `.sbatch` script you're submitting before running it on your own
-> allocation.
+> Check the `--partition` field (and add `--account=...` if your cluster
+> requires one) at the top of `job_script.sh` before running it on your
+> own allocation.
+
 
 ### 4. Submitting the job
 
@@ -185,10 +190,10 @@ accidentally matches `"FBC2"` or a `"GEX1"`-only row.
 | `"all"` | GEX + FBC pooled, matching Cell Ranger's own input | `combined_gex_fbc` |
 | `"GEX1"` | Gene-expression library only | `gex_only` |
 
-Or just submit the already-configured script directly:
+Or just submit the already-configured example directly:
 
 ```bash
-sbatch sbatch/run_fbc_align.sbatch
+sbatch job_script.sh
 ```
 
 ## Optional Features
