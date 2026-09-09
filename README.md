@@ -47,7 +47,7 @@ Currently the pipeline performs the following, per configured well:
 
 ## Quick Start
 
-> **Important**
+> [!Important]
 > `cellranger multi` must already have been run for every well before
 > starting here. This pipeline does not run it for you.
 
@@ -84,7 +84,7 @@ Each **well** (e.g. `236860-1`) is described by its own `cellranger multi` CSV,
 which Snakemake parses directly. The `wells` block indicates the location of
 the CSV and `outs` directory from the `cellRanger multi` run.
 
-> **Important**
+> [!Important]
 > What this pipeline calls a "well" is the final sequencing pool
 > (`236860-1`, `236860-2`), not one of the OCM chip's own physical loading
 > wells. The chip has 8 physical wells, but it multiplexes 4 samples into
@@ -149,7 +149,7 @@ its own separate `sbatch` job, sized to that rule's own declared
 `threads`/`resources` (see `cluster_profile/config.yaml`), instead of one
 job reserving a single large allocation upfront for the whole pipeline.
 
-> **Important**
+> [!Important]
 > Check the `--partition` field (and add `--account=...` if your cluster
 > requires one) at the top of `job_script.sh` before running it on your
 > own allocation.
@@ -217,7 +217,7 @@ to `{results_dir}/02_sc_alignment/{well}.unmapped.fastq.gz` alongside the
 main alignment. This happens automatically as part of the normal
 alignment rule; no extra target is needed to produce it.
 
-> **Note**
+> [!Note]
 > Reads that DID align somewhere (a tRNA locus or not, ambiguous or not)
 > are already fully characterized elsewhere: `choosemappings.py` doesn't
 > drop them, it just picks a best reference, and the per-sample biotype
