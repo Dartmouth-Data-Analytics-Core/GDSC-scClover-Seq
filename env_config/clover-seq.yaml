@@ -35,4 +35,5 @@ dependencies:
   - r-pheatmap
   - fastp>=0.23.2
   - umi_tools >=1.1.4
+  - scipy>=1.10
   - zsh

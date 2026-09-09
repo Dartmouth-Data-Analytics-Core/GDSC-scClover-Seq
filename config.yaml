@@ -15,12 +15,16 @@ wells:
     multi_csv: /dartfs-hpc/rc/lab/G/GSR_Active/Labs/Orellana/260608_10X/analysis/OCM2.csv
     multi_out: /dartfs-hpc/rc/lab/G/GSR_Active/Labs/Orellana/260608_10X/analysis/236860_2/outs
 
-# qual biblioteca puxar do [libraries] do CSV (substring do fastq_id).
-# "FBC1" pega FBC1 e FBC1_DIL1, e exclui FBC2 e GEX.
+# qual biblioteca puxar do [libraries] do CSV (token exato do fastq_id,
+# separado por "_" -- ex: "236860-1_GEX1_FBC1" -> tokens GEX1, FBC1).
+# Default = FBC1 (a pipeline de tRNA, o uso principal); pra rodar GEX-only
+# ou "all" (GEX+FBC juntos), sobrescreva os 3 via --config, como os outros
+# .sbatch já fazem (ex: sbatch/run_gex_align.sbatch usa library_filter=GEX1
+# library_exclude=FBC1 results_dir=gex_only).
 fbc_token: FBC1
-library_filter: "GEX"  
-library_exclude: "FBC"           # "all" = GEX + FBC juntos (como o Cell Ranger)
-results_dir: gex_only 
+library_filter: "FBC1"
+library_exclude: "__none__"      # "all" = GEX + FBC juntos (como o Cell Ranger)
+results_dir: fbc_only
 
 # --- barcode / UMI (3' v4: 16 bp CB + 12 bp UMI, R1 = 28 bp, verificado) ---
 bc_pattern: CCCCCCCCCCCCCCCCNNNNNNNNNNNN
@@ -34,7 +38,7 @@ minlength: 20
 # --- bowtie2 / referência tRNA (mesma do bulk) ---
 trna_db: "/dartfs-hpc/rc/lab/G/GMBSR_bioinfo/genomic_references/tRAX_databases/mm10_db"
 bt2_index: "/dartfs-hpc/rc/lab/G/GMBSR_bioinfo/genomic_references/tRAX_databases/mm10_db/bt2_index/db-tRNAgenome"
-maxMaps: 50
+maxMaps: 100
 nPenalty: 5
 
 # --- full biotype classification (count_all_smRNA.py), FBC library only ---
@@ -42,3 +46,7 @@ nPenalty: 5
 smrna_gtf: "/dartfs-hpc/rc/lab/G/GSR_Active/scripts/refs/Mouse/mm10_smRNA/genes/genes.gtf.gz"
 # which OBs to split out and compare (well1+well2 summed per OB, via replicate grouping)
 fbc_biotype_obs: ["OB1", "OB2"]
+# reclassified copy of smrna_gtf (Gm23935 miRNA->rRNA fix, see CONTEXT.md) --
+# used by sc_biotype_by_sample instead of smrna_gtf, same GTF the earlier
+# grant-item-3 biotype table (run_fbc_biotype.sbatch) already used.
+reclass_gtf: "/dartfs-hpc/rc/lab/G/GMBSR_bioinfo/Labs/orellana/2607_10X/grant_data/ref/genes.reclass.gtf.gz"
