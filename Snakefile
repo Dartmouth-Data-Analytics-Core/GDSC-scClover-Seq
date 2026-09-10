@@ -15,8 +15,8 @@
 #
 # OCM sample identity is in the 16 bp cell barcode (validated on 236860-2):
 # cellranger multi's per-OB called-cell lists demultiplex for us, so we align
-# ONCE per well and count 4x per well. bulk Clover-Seq logic (bowtie2 -k +
-# choosemappings.py) is UNCHANGED.
+# ONCE per well and count once per OB in that well (any number of OBs).
+# bulk Clover-Seq logic (bowtie2 -k + choosemappings.py) is UNCHANGED.
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
 import os
@@ -192,7 +192,7 @@ rule pool_runs:
     """
 
 
-#----- Rule 0b: union cell whitelist for the well (4 OB lists), "-1" stripped.
+#----- Rule 0b: union cell whitelist for the well (one list per OB), "-1" stripped.
 rule cell_whitelist:
     input:
         bcs = lambda w: list(WELLS[w.well]["ob_barcodes"].values())
@@ -402,7 +402,7 @@ rule sc_tRNA_count_isodecoder:
     """
 
 
-#----- Rule 6: OB1-OB8 external-naming view (see EXT_OB_SOURCE above).
+#----- Rule 6: OB1-N external-naming view (see EXT_OB_SOURCE above).
 # Symlinks ONLY -- never a second copy of the data. 03_tRNA_matrix/{well}/
 # stays the single source of truth; every existing script that already
 # reads it (UMAP scripts, isodecoder tables, the objects already shared
@@ -416,7 +416,7 @@ rule sc_tRNA_by_sample_view:
         matrix   = f"{RES}/03_tRNA_matrix_by_sample/{{ext_ob}}{{variant}}/matrix.mtx",
         barcodes = f"{RES}/03_tRNA_matrix_by_sample/{{ext_ob}}{{variant}}/barcodes.tsv",
         features = f"{RES}/03_tRNA_matrix_by_sample/{{ext_ob}}{{variant}}/features.tsv"
-    message: "OB1-OB8 sample view: {wildcards.ext_ob}{wildcards.variant}"
+    message: "OB1-N sample view: {wildcards.ext_ob}{wildcards.variant}"
     threads: 1
     resources: maxtime="0:10:00", mem_mb="1gb"
     run:
@@ -431,7 +431,7 @@ rule sc_tRNA_by_sample_view:
 
 
 #----- Rule 7: split each well's resolved BAM into one BAM per external
-# sample (OB1-8, see EXT_OB_SOURCE), so count_all_smRNA.py (rule 9) --
+# sample (OB1-N, see EXT_OB_SOURCE), so count_all_smRNA.py (rule 9) --
 # which has no --whitelist option, unlike count_singlecell_tRNA.py -- can
 # classify each sample separately. code/split_bam_by_whitelist.py
 # already supports passing just one --ob label per call.
@@ -458,13 +458,13 @@ rule sc_biotype_split_bam:
 
 
 #----- Rule 8: samplefile for count_all_smRNA.py, one row per external
-# sample (OB1-8) -- each gets its own `replicate` value so nothing gets
+# sample (OB1-N) -- each gets its own `replicate` value so nothing gets
 # pooled across wells (unlike run_fbc_biotype.sbatch's OB1/OB2 tables,
 # which deliberately DO pool well1+well2 under one replicate value).
 rule sc_biotype_samplefile:
     output:
         tsv = f"{RES}/03_biotype_by_sample/samples.txt"
-    message: "Writing count_all_smRNA.py samplefile for OB1-OB8"
+    message: "Writing count_all_smRNA.py samplefile for OB1-N"
     threads: 1
     resources: maxtime="0:10:00", mem_mb="1gb"
     run:
@@ -482,12 +482,12 @@ rule sc_biotype_samplefile:
                 fh.write(f"biosample_{ext_ob}\t{ext_ob}\t{RES}/02_sc_alignment/by_sample\n")
 
 
-#----- Rule 9: full biotype classification per sample (OB1-8), general
+#----- Rule 9: full biotype classification per sample (OB1-N), general
 # pipeline output -- NOT tied to any one comparison (Esteban's request,
 # 2026-09-02). Reuses code/count_all_smRNA.py UNMODIFIED, the original
 # bulk Clover-Seq classifier (mature tRNA -> pre-tRNA loci -> Ensembl GTF
 # -> other, see its own docstring) -- categories are not hardcoded here,
-# they come from whatever gene_biotype values appear in reclass_gtf for
+# they come from whatever gene_biotype values appear in smrna_gtf for
 # each sample's reads. Deliberately does NOT report protein_coding: this
 # rule's input BAM is bowtie2 (non-splice-aware) + choosemappings.py,
 # which has a structural bias toward resolving ambiguous reads as tRNA
@@ -504,12 +504,12 @@ rule sc_biotype_by_sample:
         norm = f"{RES}/03_biotype_by_sample/biotype_by_sample_norm.txt",
         raw  = f"{RES}/03_biotype_by_sample/biotype_by_sample_raw.txt"
     log: f"{RES}/03_biotype_by_sample/logs/count_all_smRNA.log"
-    message: "Classifying biotype composition per sample (OB1-OB8)"
+    message: "Classifying biotype composition per sample (OB1-N)"
     conda: "env_config/clover-seq.yaml"
     threads: 8
     resources: maxtime="6:00:00", mem_mb="32gb"
     params:
-        ensemblgtf  = config["reclass_gtf"],
+        ensemblgtf  = config["smrna_gtf"],
         maturetrnas = f"{config['trna_db']}/db-maturetRNAs.bed",
         trnaloci    = f"{config['trna_db']}/db-trnaloci.bed",
         trnatable   = f"{config['trna_db']}/db-trnatable.txt"
@@ -529,12 +529,12 @@ rule sc_biotype_by_sample:
 
 #----- Rule 10: protein_coding matrix, per well/OB -- brings
 # code/extract_proteincoding_cellranger.py into the tracked
-# pipeline (previously a standalone manual script, see README TODO). This
+# pipeline (previously a standalone manual script). This
 # is a pure filter, not a recount: takes cellranger multi's own
 # already-computed sample_filtered_feature_bc_matrix (GEX+FBC1-pooled,
 # splice-aware STAR counts, already-called cells, already UMI-deduplicated
 # -- nothing here re-aligns or re-counts anything), keeps only genes tagged
-# protein_coding in reclass_gtf, strips cellranger's "-1" barcode suffix to
+# protein_coding in smrna_gtf, strips cellranger's "-1" barcode suffix to
 # match this pipeline's own raw-barcode convention. Deliberately filtered,
 # not the raw all-biotypes matrix: mixing rRNA/tRNA capture differences
 # into one shared normalization would reintroduce a compositional confound
@@ -561,7 +561,7 @@ rule sc_protein_coding_matrix:
     threads: 1
     resources: maxtime="1:00:00", mem_mb="16gb"
     params:
-        gtf = config["reclass_gtf"]
+        gtf = config["smrna_gtf"]
     shell: """
         python code/extract_proteincoding_cellranger.py \
             --matrix {input.matrix_dir} \
@@ -571,10 +571,10 @@ rule sc_protein_coding_matrix:
     """
 
 
-#----- Rule 11: OB1-OB8 external-naming view for the protein_coding
+#----- Rule 11: OB1-N external-naming view for the protein_coding
 # matrix, mirroring rule 6 (sc_tRNA_by_sample_view) exactly -- same
 # EXT_OB_SOURCE mapping, symlinks only. Goal: Esteban (or anyone) can
-# Read10X() a clean OB1-OB8-numbered matrix for EITHER assay without
+# Read10X() a clean OB1-N-numbered matrix for EITHER assay without
 # knowing the well1/well2 internal layout, then build their own Seurat
 # object (see grant_data/code/umap_ob2_ob3_trna_local.R for a worked
 # example that also adds the tRNA assay on the same object).
@@ -587,7 +587,7 @@ rule sc_protein_coding_by_sample_view:
         matrix   = f"{RES}/03_protein_coding_matrix_by_sample/{{ext_ob}}/matrix.mtx",
         barcodes = f"{RES}/03_protein_coding_matrix_by_sample/{{ext_ob}}/barcodes.tsv",
         features = f"{RES}/03_protein_coding_matrix_by_sample/{{ext_ob}}/features.tsv"
-    message: "OB1-OB8 sample view (protein_coding): {wildcards.ext_ob}"
+    message: "OB1-N sample view (protein_coding): {wildcards.ext_ob}"
     threads: 1
     resources: maxtime="0:10:00", mem_mb="1gb"
     run:

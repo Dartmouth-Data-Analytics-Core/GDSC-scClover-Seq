@@ -42,8 +42,6 @@ bt2_index: "/dartfs-hpc/rc/lab/G/GMBSR_bioinfo/genomic_references/tRAX_databases
 maxMaps: 100
 nPenalty: 5
 
-# --- full biotype classification (count_all_smRNA.py), FBC library only ---
+# --- full biotype classification (count_all_smRNA.py) ---
 # Ensembl GTF used to build the mm10_smRNA cellranger reference (gene_biotype tag).
 smrna_gtf: "/dartfs-hpc/rc/lab/G/GSR_Active/scripts/refs/Mouse/mm10_smRNA/genes/genes.gtf.gz"
-# reclassified copy of smrna_gtf (Gm23935 miRNA->rRNA fix) --
-reclass_gtf: "/dartfs-hpc/rc/lab/G/GMBSR_bioinfo/Labs/orellana/2607_10X/grant_data/ref/genes.reclass.gtf.gz"

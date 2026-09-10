@@ -166,7 +166,7 @@ before a first run:
 | `trna_db` / `bt2_index` | Prebuilt mm10 tRNA database and its Bowtie2 index. Only change for a different genome. |
 | `bc_pattern` / `umi_separator` | Cell barcode + UMI structure (10x 3' v4: 16 bp CB + 12 bp UMI) and the separator used when appending them to read names. |
 | `tso` / `adapter_1` / `minlength` | 5' TSO and 3' adapter/poly-A trimmed from R2 before Bowtie2 alignment, since Bowtie2 has no trimming of its own, unlike Cell Ranger's internal STAR step. `tso` is the 30 bp Template Switch Oligo 10x's own chemistry flanks every cDNA construct with (Cell Ranger trims this same sequence internally before its own alignment). |
-| `smrna_gtf` / `reclass_gtf` | Gene annotation used for biotype classification (rule `sc_biotype_by_sample`) and protein-coding extraction (rule `sc_protein_coding_matrix`). |
+| `smrna_gtf` | Ensembl GTF (gene_biotype tag) used for biotype classification (rule `sc_biotype_by_sample`) and protein-coding extraction (rule `sc_protein_coding_matrix`). |
 
 ### 3. Job submission scripts
 
