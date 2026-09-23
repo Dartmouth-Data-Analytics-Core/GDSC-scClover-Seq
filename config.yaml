@@ -45,3 +45,9 @@ nPenalty: 5
 # --- full biotype classification (count_all_smRNA.py) ---
 # Ensembl GTF used to build the mm10_smRNA cellranger reference (gene_biotype tag).
 smrna_gtf: "/dartfs-hpc/rc/lab/G/GSR_Active/scripts/refs/Mouse/mm10_smRNA/genes/genes.gtf.gz"
+
+# --- rRNA summary (unmapped reads aligned against the mouse rDNA repeat) ---
+# NCBI BK000964.3, complete Mus musculus rDNA repeat unit (18S-ITS1-5.8S-ITS2-28S), tracked in the repo.
+rdna_ref: "ref/BK000964.3_mm_rDNA_repeat.fasta"
+rrna_short_max: 20    # reads <= this many nt are counted as "too short" (cutadapt's minlength is 20)
+rrna_top_n: 100       # top-N unique long remainder sequences written to FASTA (for BLAST)

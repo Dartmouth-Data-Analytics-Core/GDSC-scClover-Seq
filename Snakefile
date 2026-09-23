@@ -167,7 +167,11 @@ PC_TARGETS = [
 
 MANIFEST_TARGETS = [f"{RES}/sample_manifest.tsv"]
 
-TARGETS = TARGETS + BY_SAMPLE_TARGETS + BIOTYPE_TARGETS + PC_TARGETS + MANIFEST_TARGETS
+RRNA_TARGETS = [f"{RES}/04_rrna/rrna_summary.tsv",
+                f"{RES}/04_rrna/rrna_composition.png",
+                f"{RES}/04_rrna/rrna_remainder_length.png"]
+
+TARGETS = TARGETS + BY_SAMPLE_TARGETS + BIOTYPE_TARGETS + PC_TARGETS + MANIFEST_TARGETS + RRNA_TARGETS
 
 
 rule all:
@@ -621,3 +625,156 @@ rule sample_manifest:
             for ext_ob in ordered_ext_obs:
                 well, ob = EXT_OB_SOURCE[ext_ob]
                 fh.write(f"{ext_ob}\t{well}\t{ob}\n")
+
+
+#----- Rules 13-16: rRNA summary. The tRNA+genome bowtie2 index (rule 3) very
+# likely represents the tandemly repeated rDNA array poorly or not at all, so
+# rRNA reads end up in {well}.unmapped.fastq.gz instead of being recognized.
+# These rules quantify that: align each well's unmapped reads against the
+# complete mouse rDNA repeat unit (config: rdna_ref, NCBI BK000964.3, tracked
+# under ref/), then summarize rRNA per OB for BOTH the mapped reads (rRNA and
+# Mt_rRNA rows of the biotype table) and the unmapped ones, plus a profile of
+# what still doesn't align (the "remainder"). Scoring is bowtie2's own default
+# for --local --very-sensitive on purpose (no --np/--ignore-quals as in rule 3):
+# the question here is "does it look like rRNA at all", and these are the
+# exact flags behind the numbers first reported (93.2% / 94.1%).
+# Needs {well}.unmapped.fastq.gz, i.e. rule 3's `--un-gz` (added 2026-09-09).
+RDNA_PREFIX = f"{RES}/04_rrna/rdna_index/rdna"
+RDNA_IDX = [f"{RDNA_PREFIX}{ext}" for ext in (".1.bt2", ".2.bt2", ".3.bt2", ".4.bt2", ".rev.1.bt2", ".rev.2.bt2")]
+
+
+#----- Rule 13: bowtie2 index of the rDNA reference (built once, shared by all wells).
+rule rdna_index:
+    input:
+        ref = config["rdna_ref"]
+    output:
+        RDNA_IDX
+    log: f"{RES}/04_rrna/logs/rdna_index.log"
+    message: "Building bowtie2 index for the rDNA reference"
+    conda: "env_config/clover-seq.yaml"
+    threads: 1
+    resources: maxtime="0:30:00", mem_mb="2gb"
+    params:
+        prefix = RDNA_PREFIX
+    shell: """
+        bowtie2-build --quiet {input.ref} {params.prefix} 2> {log}
+    """
+
+
+#----- Rule 14: align a well's unmapped reads against the rDNA reference. The
+# SAM is discarded (only counts matter); reads that still fail to align are kept
+# in {well}.unmapped_after_rdna.fastq.gz for further characterization, and
+# bowtie2's own summary is kept as an output so rule 15 can cross-check it.
+rule unmapped_vs_rdna:
+    input:
+        fastq = f"{RES}/02_sc_alignment/{{well}}.unmapped.fastq.gz",
+        idx   = RDNA_IDX
+    output:
+        remainder = f"{RES}/04_rrna/{{well}}.unmapped_after_rdna.fastq.gz",
+        stats     = f"{RES}/04_rrna/{{well}}.rdna_bowtie2.log"
+    message: "Aligning unmapped reads against the rDNA repeat: {wildcards.well}"
+    conda: "env_config/clover-seq.yaml"
+    threads: 8
+    resources: maxtime="2:00:00", mem_mb="8gb"
+    params:
+        prefix = RDNA_PREFIX
+    shell: """
+        bowtie2 \
+            --local \
+            --very-sensitive \
+            -x {params.prefix} \
+            -U {input.fastq} \
+            --no-unal \
+            --un-gz {output.remainder} \
+            -p {threads} \
+            -S /dev/null \
+            2> {output.stats}
+    """
+
+
+#----- Rule 15: per-well rRNA summary (one row per OB plus ALL), remainder length
+# histogram, and top long remainder sequences as FASTA (for BLAST). OB labels are
+# the external OB1-N names (EXT_OB_SOURCE), each paired with that OB's own Cell
+# Ranger barcode whitelist so unmapped reads can be attributed to their sample.
+rule rrna_summary_well:
+    input:
+        unmapped  = f"{RES}/02_sc_alignment/{{well}}.unmapped.fastq.gz",
+        remainder = f"{RES}/04_rrna/{{well}}.unmapped_after_rdna.fastq.gz",
+        stats     = f"{RES}/04_rrna/{{well}}.rdna_bowtie2.log",
+        biotype   = f"{RES}/03_biotype_by_sample/biotype_by_sample_raw.txt"
+    output:
+        tsv   = f"{RES}/04_rrna/{{well}}.rrna_summary.tsv",
+        hist  = f"{RES}/04_rrna/{{well}}.remainder_length_hist.tsv",
+        fasta = f"{RES}/04_rrna/{{well}}.remainder_long_top.fasta"
+    log: f"{RES}/04_rrna/logs/{{well}}.rrna_summary.log"
+    message: "Summarizing rRNA per OB (mapped + unmapped): {wildcards.well}"
+    conda: "env_config/clover-seq.yaml"
+    threads: 1
+    resources: maxtime="1:00:00", mem_mb="8gb"
+    params:
+        obs = lambda w: " ".join(
+            f"--ob {ext}={WELLS[wl]['ob_barcodes'][ob]}"
+            for ext, (wl, ob) in sorted(EXT_OB_SOURCE.items(), key=lambda kv: int(kv[0][2:]))
+            if wl == w.well
+        ),
+        short_max     = config["rrna_short_max"],
+        top_n         = config["rrna_top_n"],
+        umi_separator = config["umi_separator"]
+    shell: """
+        python code/rrna_summary.py \
+            --well {wildcards.well} \
+            --unmapped {input.unmapped} \
+            --remainder {input.remainder} \
+            --bowtie2-log {input.stats} \
+            --biotype-raw {input.biotype} \
+            {params.obs} \
+            --short-max {params.short_max} \
+            --top-n {params.top_n} \
+            --umi-separator {params.umi_separator} \
+            --out-tsv {output.tsv} \
+            --out-hist {output.hist} \
+            --out-fasta {output.fasta} \
+            2> {log}
+    """
+
+
+#----- Rule 16: one table for every well (header written once).
+rule rrna_summary:
+    input:
+        tsvs = [f"{RES}/04_rrna/{well}.rrna_summary.tsv" for well in sorted(WELLS)]
+    output:
+        tsv = f"{RES}/04_rrna/rrna_summary.tsv"
+    message: "Merging per-well rRNA summaries"
+    threads: 1
+    resources: maxtime="0:10:00", mem_mb="1gb"
+    run:
+        with open(output.tsv, "w") as out:
+            for i, path in enumerate(input.tsvs):
+                with open(path) as fh:
+                    header = fh.readline()
+                    if i == 0:
+                        out.write(header)
+                    out.write(fh.read())
+
+
+#----- Rule 17: figures for the rRNA summary (composition per OB, and the
+# length profile of the unmapped reads with no alignment to the rRNA reference). Uses the R
+# packages already in clover-seq.yaml (ggplot2, dplyr, tidyr).
+rule rrna_plots:
+    input:
+        summary = f"{RES}/04_rrna/rrna_summary.tsv",
+        hists   = [f"{RES}/04_rrna/{well}.remainder_length_hist.tsv" for well in sorted(WELLS)]
+    output:
+        composition = f"{RES}/04_rrna/rrna_composition.png",
+        length      = f"{RES}/04_rrna/rrna_remainder_length.png"
+    log: f"{RES}/04_rrna/logs/rrna_plots.log"
+    message: "Plotting rRNA summary"
+    conda: "env_config/clover-seq.yaml"
+    threads: 1
+    resources: maxtime="0:10:00", mem_mb="2gb"
+    params:
+        short_max = config["rrna_short_max"]
+    shell: """
+        Rscript code/plot_rrna_summary.R {input.summary} {output.composition} {output.length} \
+            {params.short_max} {input.hists} 2> {log}
+    """

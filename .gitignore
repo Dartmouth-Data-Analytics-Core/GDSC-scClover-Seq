@@ -14,6 +14,7 @@ __pycache__/
 03_tRNA_matrix/
 combined_gex_fbc/
 fbc_only/
+fbc_only_mm100/
 gex_only/
 ocm1_results/
 ocm2_results/

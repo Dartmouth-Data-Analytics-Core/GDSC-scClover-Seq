@@ -44,6 +44,7 @@ Currently the pipeline performs the following, per configured well:
 - Per-sample biotype composition reusing Clover-Seq's unmodified
   `count_all_smRNA.py`
 - Pull-through of `cellranger multi` gene expression matrix, filtered to protein-coding genes, for combined tRNA + gene-expression analyses
+- rRNA summary per sample: unmapped reads are aligned against a mouse rRNA reference, and rRNA is reported per sample for both mapped and unmapped reads
 
 ## Installation
 
@@ -167,6 +168,7 @@ before a first run:
 | `bc_pattern` / `umi_separator` | Cell barcode + UMI structure (10x 3' v4: 16 bp CB + 12 bp UMI) and the separator used when appending them to read names. |
 | `tso` / `adapter_1` / `minlength` | 5' TSO and 3' adapter/poly-A trimmed from R2 before Bowtie2 alignment, since Bowtie2 has no trimming of its own, unlike Cell Ranger's internal STAR step. `tso` is the 30 bp Template Switch Oligo 10x's own chemistry flanks every cDNA construct with (Cell Ranger trims this same sequence internally before its own alignment). |
 | `smrna_gtf` | Ensembl GTF (gene_biotype tag) used for biotype classification (rule `sc_biotype_by_sample`) and protein-coding extraction (rule `sc_protein_coding_matrix`). |
+| `rdna_ref` / `rrna_short_max` / `rrna_top_n` | Mouse rRNA reference for the rRNA summary (NCBI BK000964.3, tracked in `ref/`); reads at most `rrna_short_max` nt long (default 20) are counted as too short; number of top unique long sequences written to FASTA for BLAST. |
 
 ### 3. Job submission scripts
 
@@ -252,6 +254,11 @@ whatever `results_dir` is set to (e.g. `fbc_only`).
 | `sc_protein_coding_matrix` | `{results_dir}/03_protein_coding_matrix_cellranger/{well}_{ob}/matrix.mtx` | Cell Ranger's own splice-aware protein-coding gene matrix, one well/OB |
 | `sc_protein_coding_by_sample_view` | `{results_dir}/03_protein_coding_matrix_by_sample/{ext_ob}/matrix.mtx` | Flat OB1-OB8 view of the protein-coding matrices above |
 | `sample_manifest` | `{results_dir}/sample_manifest.tsv` | Maps each external sample (`ext_ob`) back to its well/internal OB label |
+| `rdna_index` | `{results_dir}/04_rrna/rdna_index/rdna.*.bt2` | Bowtie2 index of the mouse rRNA reference (built once) |
+| `unmapped_vs_rdna` | `{results_dir}/04_rrna/{well}.unmapped_after_rdna.fastq.gz`, `{well}.rdna_bowtie2.log` | Unmapped reads aligned against the rRNA reference; reads that still do not align are kept |
+| `rrna_summary_well` | `{results_dir}/04_rrna/{well}.rrna_summary.tsv`, `{well}.remainder_length_hist.tsv`, `{well}.remainder_long_top.fasta` | Per-sample rRNA summary, plus a length histogram and the most frequent long sequences of the reads that still do not align |
+| `rrna_summary` | `{results_dir}/04_rrna/rrna_summary.tsv` | All wells in one table |
+| `rrna_plots` | `{results_dir}/04_rrna/rrna_composition.png`, `rrna_remainder_length.png` | Composition of each sample and length profile of the unmapped reads with no alignment to the rRNA reference |
 
 Target a specific output file directly:
 
@@ -280,7 +287,6 @@ snakemake --cores 8 --use-conda --conda-frontend conda \
   --until sc_biotype_by_sample
 ```
 
-
 ### Unmapped-read capture
 
 Reads that never align anywhere in the tRNA+genome reference are written
@@ -295,6 +301,74 @@ alignment rule; no extra target is needed to produce it.
 > table (`sc_biotype_by_sample`) already classifies every one of them.
 > `unmapped.fastq.gz` is specifically the reads that reached neither.
 
+### rRNA summary
+
+Quantifies how much of each sample (OB) is ribosomal RNA, in reads that
+mapped and in reads that did not. It exists because most unmapped reads are
+rRNA: the rDNA repeat array is tandemly repeated and poorly assembled in
+reference genomes such as mm10, so those reads have nowhere to align in the
+tRNA+genome index.
+
+How it works, per well:
+
+1. `unmapped_vs_rdna` aligns `{well}.unmapped.fastq.gz` against a mouse rRNA
+   reference (`rdna_ref`: NCBI BK000964.3, the complete rDNA repeat unit with
+   18S, 5.8S and 28S rRNA plus the spacers, tracked in `ref/`) with Bowtie2
+   `--local --very-sensitive`. Reads that align are rRNA; reads that do not are
+   the *remainder*.
+2. `rrna_summary_well` assigns every unmapped read to its OB through the cell
+   barcode in its read name, takes the mapped rRNA counts from
+   `biotype_by_sample_raw.txt`, and writes one table row per OB plus an `ALL`
+   row. It also checks the read totals against the Bowtie2 log and stops if
+   the files are not from the same run.
+3. `rrna_summary` merges the wells, and `rrna_plots` draws the two figures.
+
+It needs `{well}.unmapped.fastq.gz`, so the run must have been made with the
+`--un-gz` output of `sc_tRNA_bowtie2` (see
+[Unmapped-read capture](#unmapped-read-capture)). Run it on its own:
+
+```bash
+snakemake {results_dir}/04_rrna/rrna_summary.tsv \
+  {results_dir}/04_rrna/rrna_composition.png \
+  {results_dir}/04_rrna/rrna_remainder_length.png \
+  --cores 8 --use-conda --conda-frontend conda --snakefile Snakefile \
+  --config results_dir=fbc_only
+```
+
+Settings in `config.yaml`: `rdna_ref`, `rrna_short_max` (default 20) and
+`rrna_top_n` (default 100).
+
+`rrna_summary.tsv` has one row per OB and one `ALL` row per well:
+
+| Columns | Meaning |
+|---|---|
+| `mapped_reads` | Sum of all biotype rows of that sample in `biotype_by_sample_raw.txt`, as counted by `count_all_smRNA.py` on the resolved per-sample BAMs. |
+| `mapped_rRNA`, `mapped_MtrRNA` (+ `_pct`) | Reads in the `rRNA` and `Mt_rRNA` rows, and their % of `mapped_reads` |
+| `unmapped_reads` | Reads of the sample in `{well}.unmapped.fastq.gz` |
+| `unmapped_rRNA` (+ `_pct`) | Unmapped reads that align to the rRNA reference, and their % of `unmapped_reads` |
+| `unmapped_le20nt` (+ `_pct`) | Unmapped reads of at most `rrna_short_max` nt, and their % of `unmapped_reads` |
+| `total_reads` | `mapped_reads` + `unmapped_reads` |
+| `total_rRNA` (+ `_pct`) | `mapped_rRNA` + `mapped_MtrRNA` + `unmapped_rRNA`, and its % of `total_reads` |
+| `unmapped_pct_of_total` | `unmapped_reads` as % of `total_reads` |
+| `remainder_reads` | Unmapped reads that do not align to the rRNA reference |
+| `remainder_gt20nt` | Remainder reads longer than `rrna_short_max` nt |
+| `remainder_gt20nt_unique_seqs` | Distinct sequences among them |
+
+Things to know when reading it:
+
+- Reads of at most 20 nt are counted as too short (20 is also the cutadapt
+  `minlength`). With Bowtie2's default local-mode minimum score, a 20 nt read
+  cannot align even with zero mismatches, so every one of them lands in the
+  remainder. The script checks this and stops otherwise.
+- `remainder_reads` is `unmapped_le20nt` plus `remainder_gt20nt`, and
+  `unmapped_rRNA` is `unmapped_reads` minus `remainder_reads`.
+
+For the reads that align to neither reference, `{well}.remainder_long_top.fasta`
+holds the `rrna_top_n` most frequent sequences longer than 20 nt (with counts
+in the header), ready for BLAST, and `{well}.remainder_length_hist.tsv` holds
+their length distribution per OB. Sequences that differ by one base are
+counted separately, so a fragmented list can hide a larger family.
+
 ## Understanding the Outputs
 
 | Path | Contents |
@@ -304,6 +378,9 @@ alignment rule; no extra target is needed to produce it.
 | `{results_dir}/03_biotype_by_sample/biotype_by_sample_{raw,norm}.txt` | Per-sample biotype composition. The `protein_coding` row here should not be read as real mRNA capture: Bowtie2 isn't splice-aware, so it aligns equally well to a gene's introns as to its exons, and the classifier counts a read as `protein_coding` anywhere in that gene's full genomic span, not just the exons. |
 | `{results_dir}/03_protein_coding_matrix_by_sample/{OB}/` | Same flat per-sample layout as the tRNA matrix, for Cell Ranger's own splice-aware protein-coding counts. |
 | `{results_dir}/02_sc_alignment/{well}.unmapped.fastq.gz` | Reads that never aligned anywhere in the tRNA+genome reference; see [Unmapped-read capture](#unmapped-read-capture). |
+| `{results_dir}/04_rrna/rrna_summary.tsv` | rRNA per sample and per well, in mapped, unmapped and total reads; see [rRNA summary](#rrna-summary) for the columns. |
+| `{results_dir}/04_rrna/rrna_composition.png`, `rrna_remainder_length.png` | Composition of each sample, and length profile of the unmapped reads with no alignment to the rRNA reference. |
+| `{results_dir}/04_rrna/{well}.remainder_long_top.fasta`, `{well}.remainder_length_hist.tsv` | Top sequences (for BLAST) and length distribution of the unmapped reads with no alignment to the rRNA reference. |
 
 ## Contact
 
