@@ -54,6 +54,12 @@ Clone the repository:
 git clone https://github.com/Dartmouth-Data-Analytics-Core/GDSC-scClover-Seq
 cd GDSC-scClover-Seq
 ```
+If you want the version with the rRNA summary (see [rRNA summary](#rrna-summary)),
+which is on its own branch and not yet in `main`, switch to that branch after cloning:
+
+```bash
+git switch rRNA-summary-v1
+```
 
 Then get the shared Snakemake environment on your `PATH`:
 
